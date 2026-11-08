@@ -1,0 +1,38 @@
+[workspace]
+members = [
+    ".",
+    "crates/agent-sentry-validator",
+]
+
+[package]
+name = "agent-sentry-vault"
+version = "0.1.0"
+edition = "2021"
+description = "AgentSentry: Verifiable Execution Firewall & Payment Vault Smart Contract for Autonomous AI Agents on NEAR"
+authors = ["AgentSentry Team"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = { version = "5.5.0", default-features = false, features = ["legacy"] }
+borsh = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+agent-sentry-validator = { path = "crates/agent-sentry-validator" }
+
+[dev-dependencies]
+near-sdk = { version = "5.5.0", features = ["unit-testing"] }
+
+[features]
+# Enable for integration tests that use VMContextBuilder / testing_env!
+# Requires a C toolchain (as.exe / gcc) on Windows to compile near-crypto.
+integration-tests = ["near-sdk/unit-testing"]
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true

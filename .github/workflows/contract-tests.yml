@@ -1,0 +1,31 @@
+name: Rust contract tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install stable Rust and WASM target
+        uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0 # master, 2026-09-03
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+
+      - name: Run NEAR contract integration tests
+        run: cargo test --locked --features integration-tests
+
+      - name: Run standalone validator tests
+        run: cargo test --locked -p agent-sentry-validator --lib
+
+      - name: Build NEAR contract WASM
+        run: cargo build --locked --release --target wasm32-unknown-unknown

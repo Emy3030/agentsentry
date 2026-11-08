@@ -1,0 +1,19 @@
+{
+  "name": "agent-sentry",
+  "version": "1.0.0",
+  "description": "AgentSentry: Verifiable Execution Firewall & Payment Vault for Autonomous AI Agents on NEAR",
+  "main": "contracts/agent_sentry_vault.js",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "keywords": [
+    "near",
+    "ai-agents",
+    "security",
+    "firewall",
+    "access-keys"
+  ],
+  "author": "AgentSentry Team",
+  "license": "MIT"
+}

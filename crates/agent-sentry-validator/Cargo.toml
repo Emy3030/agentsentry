@@ -1,0 +1,11 @@
+[package]
+name = "agent-sentry-validator"
+version = "0.1.0"
+edition = "2021"
+description = "AgentSentry: Pure Rust payment rule validator — no NEAR SDK dependency, fully unit-testable"
+
+# No dependencies — pure Rust only.
+# This is intentional: the validator encapsulates all deterministic payment rule
+# checks without any blockchain host-function coupling, making it testable on
+# any native platform without a C toolchain or WASM target.
+
