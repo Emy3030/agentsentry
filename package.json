@@ -5,7 +5,9 @@
   "main": "contracts/agent_sentry_vault.js",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "build": "npm run build --prefix web",
+    "dev": "npm run dev --prefix web"
   },
   "keywords": [
     "near",
