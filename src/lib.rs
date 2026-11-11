@@ -6,7 +6,10 @@ use near_sdk::{
     env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise,
 };
 
+#[cfg(not(test))]
 const DENIAL_LOG_CAPACITY: u64 = 100;
+#[cfg(test)]
+const DENIAL_LOG_CAPACITY: u64 = 10;
 const MAX_AUTH_ID_BYTES: usize = 128;
 
 #[near(serializers = [borsh, json])]
@@ -1041,9 +1044,10 @@ mod tests {
         builder.predecessor_account_id(agent());
         testing_env!(builder.build());
 
-        // Reduced overflow margin from + 7 to + 2 to stay safely under 
-        // NEAR's 16,384-byte protocol log limit per execution.
-        let total_attempts = DENIAL_LOG_CAPACITY + 2;
+        // In test mode, DENIAL_LOG_CAPACITY is 10. Fifteen requests exercise
+        // ring-buffer wraparound, eviction, and aggregate counters while
+        // keeping emitted logs below NEAR's 16,384-byte protocol limit.
+        let total_attempts = 15;
         for amount in 1..=total_attempts {
             vault.request_payment(
                 "auth_001".to_string(),
@@ -1056,19 +1060,19 @@ mod tests {
         assert!(state.is_frozen, "auto-freeze must still trip at the threshold");
         assert_eq!(state.consecutive_violations, total_attempts as u32);
         assert_eq!(state.total_denials_logged, total_attempts);
-        assert_eq!(state.denial_records_evicted, 7);
-        assert_eq!(state.oldest_denial_index, 7);
+        assert_eq!(state.denial_records_evicted, 5);
+        assert_eq!(state.oldest_denial_index, 5);
         assert_eq!(state.denial_counts.recipient_not_approved, 3);
         assert_eq!(state.denial_counts.vault_frozen, total_attempts - 3);
 
         let retained = vault.get_denial_log(Some(0), Some(DENIAL_LOG_CAPACITY));
         assert_eq!(retained.len(), DENIAL_LOG_CAPACITY as usize);
-        assert_eq!(retained[0].attempted_amount.0, 8);
+        assert_eq!(retained[0].attempted_amount.0, 6);
         assert_eq!(retained[DENIAL_LOG_CAPACITY as usize - 1].attempted_amount.0, total_attempts as u128);
 
         let latest_denial = latest_event("payment_denied");
         assert_eq!(latest_denial["denial_sequence"].as_u64(), Some(total_attempts - 1));
-        assert_eq!(latest_denial["denial_records_evicted"].as_u64(), Some(7));
+        assert_eq!(latest_denial["denial_records_evicted"].as_u64(), Some(5));
     }
 
     #[test]
