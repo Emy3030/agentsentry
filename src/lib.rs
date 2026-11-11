@@ -1041,7 +1041,9 @@ mod tests {
         builder.predecessor_account_id(agent());
         testing_env!(builder.build());
 
-        let total_attempts = DENIAL_LOG_CAPACITY + 7;
+        // Reduced overflow margin from + 7 to + 2 to stay safely under 
+        // NEAR's 16,384-byte protocol log limit per execution.
+        let total_attempts = DENIAL_LOG_CAPACITY + 2;
         for amount in 1..=total_attempts {
             vault.request_payment(
                 "auth_001".to_string(),
