@@ -1,155 +1,96 @@
-# AgentSentry: Verifiable AI Agent Payment Firewall on NEAR
+# AgentSentry: AI Agent Payment Security on NEAR
 
-> **Core Promise:** "AI agents can request payments. AgentSentry's NEAR smart contract independently enforces the owner's payment rules."
+AgentSentry is an MVP exploring an owner-controlled payment boundary for AI-driven agents. The Rust NEAR contract checks payment requests against on-chain authorization rules. The frontend includes an illustrative threat simulation and a read-only vault-state adapter; it does not submit wallet transactions.
 
-AgentSentry provides a deterministic on-chain security boundary and execution firewall between autonomous AI agents and financial payment vaults. While AI agents analyze context and propose payments, all transfers are strictly evaluated and governed by an immutable NEAR smart contract before any funds can move.
+> **Status:** The contract has not been verified as deployed. The frontend simulation is local and does not call the Rust contract. Do not interpret the demo as evidence of a live on-chain payment or rejection.
 
----
+## How the contract is designed to work
 
-## Why NEAR Protocol is Essential for AgentSentry
+1. The owner creates a single-use authorization binding an approved initiator to a recipient, maximum amount, and expiry.
+2. The authorized initiator requests a payment from the contract.
+3. The contract checks the authorization and either returns a `DENIED` result without scheduling a transfer, or reserves the amount and schedules an asynchronous native NEAR transfer.
+4. A private callback settles the reservation after the transfer promise resolves. `PENDING` means unresolved; it does not mean the payment succeeded.
 
-AgentSentry relies on fundamental architectural features of NEAR Protocol that cannot be replicated on traditional EVM chains:
+NEAR FunctionCall access keys can be scoped to contract methods, but this repository does not create or manage those keys. The AI agent must not receive the owner's unrestricted account credentials.
 
-1. **Scoped `FunctionCall` Access Keys:**
-   NEAR allows account owners to issue restricted access keys limited strictly to calling `request_payment` on the AgentSentry contract with a gas allowance. The AI agent never receives custody of the master private keys and cannot sign native transfers (`Transfer` action) or withdraw vault funds directly.
-2. **Named Account ID Model:**
-   NEAR's human-readable account identifiers (e.g., `procurement-agent.near`, `aws-billing.near`, `acme-corp.near`) allow payment policies to map directly to authenticated business identities rather than opaque cryptographic hashes.
-3. **Asynchronous Execution & Fail-Closed Callbacks:**
-   NEAR's native cross-contract call and promise pipelining enables two-phase reservation and settlement (`transfer` + private `on_transfer_complete` callback), guaranteeing that pending amounts are isolated and funds cannot be double-spent while asynchronous receipts resolve.
-4. **Predictable Low Gas & Sub-Second Finality:**
-   Enables high-frequency micro-authorizations and responsive AI agent workflows without risk of transaction delay, mempool front-running, or prohibitive transaction fees.
+## Security behavior and limitations
 
----
+- **Owner initialization:** `new` requires the immediate caller to equal `owner_id` and rejects existing state. Deployment and initialization must be atomic in a transaction submitted by the intended owner. If deployment is left uninitialized, the contract cannot know who the intended owner is; an earlier caller could initialize it with itself as owner.
+- **Payment rules:** The contract checks the approved initiator, recipient, positive amount, maximum, expiry, revocation, single-use state, freeze state, and available balance before dispatching a transfer.
+- **Expiry boundary:** An authorization is valid when the current timestamp equals `expires_at_ns`; it expires only when current time is greater.
+- **Replay protection:** Each authorization ID is unique and marked used while pending and after execution. The optional `nonce` is stored as metadata; it is not independently checked for uniqueness.
+- **Denial monitoring:** Up to 100 denial records for the authorization's approved initiator are retained in a rotating log. Aggregate counters remain available. Arbitrary callers can produce a denial event but do not grow persistent denial storage or increment the persisted violation counter.
+- **Automatic freeze:** Consecutive persisted denials from an approved initiator can freeze the vault at the configured threshold. The owner can unfreeze it.
+- **Asynchronous settlement:** Freezing prevents new payment dispatches but does not cancel a transfer already scheduled. A confirmed transfer failure releases its reservation and makes the authorization retryable. If the callback transaction itself fails, the pending authorization and reservation remain locked indefinitely. There is no safe owner recovery method because a later call cannot prove whether the original transfer succeeded.
+- **Owner withdrawal:** The owner can withdraw available funds. Reserved funds are excluded from the withdrawable balance.
 
-## Core Architecture & Security Invariants
+## Repository layout
 
-```
-                                      +------------------------------------+
-                                      |     Human Owner (Full Access)      |
-                                      +------------------------------------+
-                                            |                       |
-                                            | authorize_payment     | emergency_freeze
-                                            v                       v
-+------------------------+  FunctionCall   +------------------------------------+
-|  Autonomous AI Agent   | --------------> |     AgentSentry Vault Contract     |
-| (Prompt-Injected / OK) | request_payment |         (NEAR Protocol)            |
-+------------------------+                 +------------------------------------+
-                                            |               |
-                                     Checks | Pass          | Fails: Zero funds transferred
-                                            v               v
-                                   +----------------+  +--------------------------------+
-                                   | Schedule NEAR  |  | On-Chain Denial Audit Log      |
-                                   | Transfer       |  | & Auto-Freeze Circuit Breaker  |
-                                   +----------------+  +--------------------------------+
-                                            |
-                                            v
-                                   +----------------+
-                                   | Approved Vendor|
-                                   +----------------+
-```
+- `src/lib.rs` — NEAR Rust contract and feature-gated integration tests.
+- `crates/agent-sentry-validator/` — dependency-free Rust payment-rule validator and unit tests.
+- `contracts/` — JavaScript reference/simulation code, not the deployed contract.
+- `tests/agent_sentry.test.js` — JavaScript simulation tests, not NEAR contract tests.
+- `web/` — React, TypeScript, and Vite frontend.
+- `.github/workflows/contract-tests.yml` — Ubuntu workflow configured for contract tests, validator tests, and WASM build.
 
-### Security Invariants
+The contract exposes public views `get_vault_state`, `get_authorization`, and `get_denial_log`. Authorizations are stored in a non-enumerable `LookupMap`; the contract does not expose a complete authorization list or complete payment history.
 
-* **1. Owner-Only Initialization Guard:**
-  The `new` method verifies that `env::predecessor_account_id() == owner_id`. The contract must be deployed and initialized in a single atomic transaction by the intended owner, preventing front-running takeovers.
-* **2. Recipient Allowlisting & Amount Ceilings:**
-  Transfers are permitted exclusively to the designated `approved_recipient` up to the authorized `max_amount`. Any mismatch or excess is rejected with zero funds leaving the vault.
-* **3. Expiry & Single-Use Replay Prevention:**
-  Authorizations expire deterministically at `expires_at_ns`. Each authorization is flagged as `used` immediately upon payment request, preventing replay attacks.
-* **4. Two-Phase Reservation & Fail-Closed Callbacks:**
-  When a valid payment request is processed, the contract reserves the balance upfront (`reserved_balance_yocto`) before dispatching the asynchronous transfer promise. A private callback (`on_transfer_complete`) finalizes the settlement. If a callback fails or reverts, the contract remains fail-closed; funds remain safely reserved to prevent double-spending.
-* **5. Bounded On-Chain Storage & DoS Protection:**
-  The contract stores the 100 most recent authorized-initiator denials in a rotating ring buffer (`Vector<DenialRecord>`) alongside fixed-size aggregate counters (`DenialCounters`). Unrelated callers cannot bloat contract storage or consume gas allotments; unauthorized attempts emit indexed NEP-style JSON events without persistent storage writes.
-* **6. Circuit Breaker Auto-Freeze:**
-  Consecutive denials from an authorized initiator increment a violation counter. Exceeding `max_consecutive_violations` triggers an automatic vault freeze, halting all dispatches until the human owner unfreezes the vault.
+## Prerequisites and setup
 
----
+- Node.js matching the installed Vite engine requirement (`^20.19.0` or `>=22.12.0`).
+- Stable Rust and Cargo. Add the WASM target if needed:
 
-## Project Structure
-
-```
-near/
-├── src/lib.rs                           # Main NEAR smart contract (AgentSentryVault)
-├── Cargo.toml                           # Workspace root configuration
-├── crates/
-│   └── agent-sentry-validator/          # Standalone, zero-dependency pure Rust rule engine
-│       ├── Cargo.toml
-│       └── src/lib.rs                   # 20 exhaustive unit tests
-├── web/                                 # Frontend Threat Simulator & Vault Monitor
-│   ├── src/                             # React 19 + TypeScript + Vite application
-│   └── package.json
-├── contracts/                           # Reference JavaScript behavioral model & specs
-│   ├── agent_sentry_vault.js            # [SIMULATION] contract model
-│   └── near_access_key_verifier.js      # [SPEC] NEAR FunctionCall key verification
-├── tests/
-│   └── agent_sentry.test.js             # [SIMULATION] 9-test reference suite
-├── package.json                         # Root test & build orchestration
-└── HACKATHON_SUBMISSION.md              # Submission overview & technical disclosure
-```
-
----
-
-## Local Installation & Verification Commands
-
-### Prerequisites
-* **Node.js**: v18.x or v20+ (`node --version`)
-* **Rust**: 1.95+ with the `wasm32-unknown-unknown` target:
   ```sh
   rustup target add wasm32-unknown-unknown
   ```
 
-### 1. Install Dependencies
+Install the frontend dependencies from the `web/` lockfile:
+
 ```sh
-npm install
-npm --prefix web install
+npm --prefix web ci
 ```
 
-### 2. Run Test Suites
+## Local verification commands
+
+Run the JavaScript reference simulation and standalone Rust validator:
+
 ```sh
-# Run JavaScript reference simulation tests (9/9 pass)
 npm test
-
-# Run Rust validator unit tests (20/20 pass)
-cargo test -p agent-sentry-validator --lib
+cargo test --locked -p agent-sentry-validator --lib
 ```
 
-### 3. Build & Run Frontend Threat Simulator
+The JavaScript tests exercise the simulation only. To run the actual NEAR contract integration tests, use a Linux environment or a Windows C/GNU toolchain that supplies the required `dlltool.exe`:
+
 ```sh
-# Production typecheck and build (zero errors)
+cargo test --locked --features integration-tests
+```
+
+Build and run the frontend:
+
+```sh
 npm run build
-
-# Start local interactive development dashboard
 npm run dev
-# Or directly inside the web folder:
-# cd web && npm run dev
 ```
 
-### 4. Build Smart Contract WASM
+The build script performs `tsc --noEmit` followed by the Vite production build. Build the NEAR WASM contract with:
+
 ```sh
-cargo build --release --target wasm32-unknown-unknown
+cargo build --locked --release --target wasm32-unknown-unknown
 ```
-The compiled release binary is located at:
-`target/wasm32-unknown-unknown/release/agent_sentry_vault.wasm`
 
----
+The default artifact path is `target/wasm32-unknown-unknown/release/agent_sentry_vault.wasm`.
 
-## Honest Status & Verification Disclosure
+## Current verification status
 
-* **Rust Rule Validator Engine (`agent-sentry-validator`):**
-  100% verified. All 20 unit tests execute locally and pass in under 0.02s, testing valid executions, ceiling breaches, expired authorizations, replay attacks, vault freezes, auto-freeze triggers, and solvency limits.
-* **JavaScript Reference Simulation (`tests/agent_sentry.test.js`):**
-  100% verified. 9 tests pass using Node.js's built-in test runner, verifying behavioral parity, access key scopes, and transaction rollback properties.
-* **Frontend Web Application (`web/`):**
-  100% verified. Built with React 19, TypeScript, and Vite. Passes `tsc --noEmit` and bundles cleanly. Offers an interactive simulation arena demonstrating adversarial attacks (prompt injection, recipient spoofing, limit escalation) against the AgentSentry security boundary.
-* **Compiled WASM Contract:**
-  The NEAR smart contract in `src/lib.rs` compiles cleanly to `wasm32-unknown-unknown` with zero errors and zero warnings (binary size ~315 KB).
-* **Live Network Status:**
-  In accordance with hackathon instructions, no live testnet or mainnet transactions have been broadcast and no funds have been spent in this local verification phase. The contract is packaged and ready for atomic deployment via `near-cli-rs`.
-* **Platform Note on Integration Tests:**
-  The `integration-tests` feature in `src/lib.rs` uses NEAR SDK 5.30's `VMContextBuilder` and runs in CI (Linux). On Windows host machines, `near-crypto`'s transitive C build dependencies require a GNU binutils assembler (`as.exe`); the decoupled `agent-sentry-validator` sub-crate guarantees that all security logic can be tested deterministically without requiring platform-specific C toolchains.
+Last local verification: **2026-11-11**.
 
----
+- **JavaScript simulation:** 9/9 tests passed using `node --test --test-isolation=none tests/agent_sentry.test.js`. In the restricted Windows runner, plain `npm test` failed with `spawn EPERM` before tests ran; the in-process Node test-runner option passed the same test file.
+- **Rust validator:** 20/20 tests passed with `cargo test --locked -p agent-sentry-validator --lib`.
+- **NEAR contract integration tests:** Not run. Compilation stopped because `dlltool.exe` was unavailable. The Ubuntu GitHub Actions workflow is configured, but has not been triggered or verified.
+- **Frontend:** `tsc --noEmit` passed. The Vite production build was blocked in this runner by `spawn EPERM` while Vite resolved its configuration. This is not a successful production build result.
+- **WASM:** Release build passed in a temporary Cargo target directory. Artifact size: **322,554 bytes**. SHA-256: `5D94F7F8C0193E463AA120A367015C46238735F5E3636A78792A54E0A4A79119`. The generated file matched the existing project artifact byte-for-byte.
+- **Network:** No account, contract deployment, wallet connection, RPC read, signed call, or testnet/mainnet transaction has been verified. The frontend's configured testnet account ID is only a read configuration, not proof that an account or deployed contract exists.
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+MIT. See [LICENSE](LICENSE).
