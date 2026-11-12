@@ -4,6 +4,10 @@ AgentSentry is an MVP exploring an owner-controlled payment boundary for AI-driv
 
 > **Status:** The contract has not been verified as deployed. The frontend simulation is local and does not call the Rust contract. Do not interpret the demo as evidence of a live on-chain payment or rejection.
 
+## Why NEAR
+
+NEAR provides two capabilities used in AgentSentry's design: account-level FunctionCall access keys can limit an agent key to a contract receiver and allowed methods, and asynchronous promises let the contract reserve funds before dispatching a native transfer and settle the result in a private callback. Owners must configure any access-key restrictions themselves; this repository does not create keys or connect a wallet. Callback failure remains fail-closed and may lock the reservation indefinitely.
+
 ## How the contract is designed to work
 
 1. The owner creates a single-use authorization binding an approved initiator to a recipient, maximum amount, and expiry.
@@ -33,7 +37,7 @@ NEAR FunctionCall access keys can be scoped to contract methods, but this reposi
 - `web/` — React, TypeScript, and Vite frontend.
 - `.github/workflows/contract-tests.yml` — Ubuntu workflow configured for contract tests, validator tests, and WASM build.
 
-The contract exposes public views `get_vault_state`, `get_authorization`, and `get_denial_log`. Authorizations are stored in a non-enumerable `LookupMap`; the contract does not expose a complete authorization list or complete payment history.
+The contract exposes public views `get_vault_state`, `get_authorization`, and `get_denial_log`. `u64` values in view responses use NEAR SDK `U64` wrappers and serialize as decimal strings for JavaScript precision. Denial-log cursors are also decimal strings. Authorizations are stored in a non-enumerable `LookupMap`; the contract does not expose a complete authorization list or complete payment history.
 
 ## Prerequisites and setup
 
@@ -49,6 +53,8 @@ Install the frontend dependencies from the `web/` lockfile:
 ```sh
 npm --prefix web ci
 ```
+
+For read-only contract state, copy `web/.env.example` to `web/.env.local` and set `VITE_NEAR_CONTRACT_ACCOUNT_ID` only to an account where the contract has actually been deployed and initialized. `VITE_NEAR_RPC_URL` defaults to NEAR testnet. The account ID and RPC URL are public frontend configuration; never put private keys or wallet credentials in Vite variables. With no account ID configured, the app makes no contract read and labels its values as demo fixtures.
 
 ## Local verification commands
 
@@ -82,14 +88,14 @@ The default artifact path is `target/wasm32-unknown-unknown/release/agent_sentry
 
 ## Current verification status
 
-Last local verification: **2026-11-11**.
+Last local verification: **2026-11-12**.
 
-- **JavaScript simulation:** 9/9 tests passed using `node --test --test-isolation=none tests/agent_sentry.test.js`. In the restricted Windows runner, plain `npm test` failed with `spawn EPERM` before tests ran; the in-process Node test-runner option passed the same test file.
+- **JavaScript simulation:** 9/9 tests passed using `node --test --test-isolation=none tests/agent_sentry.test.js`. Plain `npm test` exited 1 in this restricted Windows runner because Node could not spawn its test worker (`spawn EPERM`); no test assertions ran under that command.
 - **Rust validator:** 20/20 tests passed with `cargo test --locked -p agent-sentry-validator --lib`.
-- **NEAR contract integration tests:** Not run. Compilation stopped because `dlltool.exe` was unavailable. The Ubuntu GitHub Actions workflow is configured, but has not been triggered or verified.
+- **NEAR contract integration tests:** Not run. Compilation stopped because `dlltool.exe` was unavailable. There is no usable local Linux distribution. The Ubuntu GitHub Actions workflow is configured, but has not been triggered or verified.
 - **Frontend:** `tsc --noEmit` passed. The Vite production build was blocked in this runner by `spawn EPERM` while Vite resolved its configuration. This is not a successful production build result.
-- **WASM:** Release build passed in a temporary Cargo target directory. Artifact size: **322,554 bytes**. SHA-256: `5D94F7F8C0193E463AA120A367015C46238735F5E3636A78792A54E0A4A79119`. The generated file matched the existing project artifact byte-for-byte.
-- **Network:** No account, contract deployment, wallet connection, RPC read, signed call, or testnet/mainnet transaction has been verified. The frontend's configured testnet account ID is only a read configuration, not proof that an account or deployed contract exists.
+- **WASM:** Release build passed in a temporary Cargo target directory. Artifact size: **322,420 bytes**. SHA-256: `4D392DA1AF7AA7A0BCF8830CAC28CD2F5887B8365FC326094D4025E785D91A48`. The existing `target/` artifact is 322,554 bytes with a different hash; it was preserved and should be replaced only by a deliberate build.
+- **Network:** No account, contract deployment, wallet connection, RPC read, signed call, or testnet/mainnet transaction has been verified. The frontend ships with no contract account ID; configure one only after verifying a deployed and initialized contract.
 
 ## License
 

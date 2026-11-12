@@ -12,7 +12,7 @@ const snapshot: VaultSnapshot = {
   frozen: false,
   consecutiveViolations: 1,
   maxConsecutiveViolations: 3,
-  persistedDenialCount: 12,
+  persistedDenialCount: '12',
 };
 
 const authorizations: AuthorizationRecord[] = [

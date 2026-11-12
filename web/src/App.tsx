@@ -6,9 +6,12 @@ import { Button, DemoBadge, EmptyState, Field, Icon, Panel, SectionHeading, Stat
 import { ThreatSimulation } from './ThreatSimulation';
 import { LiveRpcReadAdapter } from './services/vaultAdapter';
 
-// Read-only testnet endpoint. The contract account is configured for reads only;
-// this does not assert that the account exists or that the contract is deployed.
-const vaultAdapter: VaultReadAdapter = new LiveRpcReadAdapter('https://rpc.testnet.near.org', 'agentsentry-owner.testnet');
+// Contract reads are opt-in. No account ID is assumed or bundled into the app.
+const contractAccountId = import.meta.env.VITE_NEAR_CONTRACT_ACCOUNT_ID?.trim() ?? '';
+const rpcEndpoint = import.meta.env.VITE_NEAR_RPC_URL?.trim() || 'https://rpc.testnet.near.org';
+const vaultAdapter: VaultReadAdapter | null = contractAccountId
+  ? new LiveRpcReadAdapter(rpcEndpoint, contractAccountId)
+  : null;
 
 const navItems = [
   { label: 'Overview', to: '/', icon: 'overview' as const },
@@ -30,10 +33,13 @@ function App() {
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [authorizations, setAuthorizations] = useState<AuthorizationRecord[]>(() => demoDataSource.getAuthorizations());
-  const [vaultRead, setVaultRead] = useState<VaultReadResult<VaultStateView> | { status: 'loading' }>({ status: 'loading' });
+  const [vaultRead, setVaultRead] = useState<VaultReadResult<VaultStateView> | { status: 'loading' }>(() => (
+    vaultAdapter ? { status: 'loading' } : { status: 'unavailable', reason: 'not-configured' }
+  ));
   const pageTitle = pageTitles[location.pathname] ?? 'Overview';
 
   useEffect(() => {
+    if (!vaultAdapter) return;
     let active = true;
     void vaultAdapter.getVaultState().then((result) => {
       if (active) setVaultRead(result);
@@ -62,7 +68,7 @@ function App() {
         <div className="sidebar-spacer" />
         <div className="boundary-card">
           <div className="boundary-icon"><Icon name="lock" size={16} /></div>
-          <div><strong>Policy boundary active</strong><p>Rules are enforced by the NEAR contract.</p></div>
+          <div><strong>Contract policy model</strong><p>Enforcement requires a deployed contract call.</p></div>
           <DemoBadge>ILLUSTRATIVE</DemoBadge>
         </div>
         <div className="sidebar-footer"><span className="footer-status-dot" />Phase 1 · Demo workspace<span>v0.1</span></div>
@@ -103,6 +109,9 @@ function DataNotice({ children = 'Illustrative demo data · not read from NEAR' 
 }
 
 function AdapterWarning({ state }: { state: VaultReadResult<VaultStateView> | { status: 'loading' } }) {
+  if (state.status === 'unavailable' && state.reason === 'not-configured') {
+    return <div className="adapter-warning" role="status">No contract account configured. Visualizing demo fixtures safely.</div>;
+  }
   if (state.status === 'unavailable' && state.reason === 'rpc-error') {
     return <div className="adapter-warning" role="status">Network Offline: Visualizing Demo Fixtures Safely.</div>;
   }
@@ -130,6 +139,21 @@ function yoctoToNear(yocto: string): string {
   return fraction ? `${whole}.${fraction}` : whole.toString();
 }
 
+function nearDecimalToYocto(value: string): bigint {
+  const match = /^(\d+)(?:\.(\d{1,24}))?$/.exec(value);
+  if (!match) throw new Error('Invalid NEAR decimal value');
+  const fraction = (match[2] ?? '').padEnd(24, '0');
+  return BigInt(match[1]) * 10n ** 24n + BigInt(fraction || '0');
+}
+
+function subtractNearValues(total: string, reserved: string): string {
+  const difference = nearDecimalToYocto(total) - nearDecimalToYocto(reserved);
+  const sign = difference < 0n ? '-' : '';
+  const absolute = difference < 0n ? -difference : difference;
+  const cents = (absolute + 5n * 10n ** 21n) / 10n ** 22n;
+  return `${sign}${cents / 100n}.${(cents % 100n).toString().padStart(2, '0')}`;
+}
+
 function PageIntro({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
   return <div className="page-intro"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{description}</p></div>{action}</div>;
 }
@@ -138,18 +162,18 @@ function OverviewPage({ vaultRead }: { vaultRead: VaultReadResult<VaultStateView
   const isLive = vaultRead.status === 'available';
   const snapshot = isLive ? toVaultSnapshot(vaultRead.value) : demoDataSource.getSnapshot();
   const activity = demoDataSource.getRecentActivity();
-  const available = (Number(snapshot.vaultBalanceNear) - Number(snapshot.reservedBalanceNear)).toFixed(2);
+  const available = subtractNearValues(snapshot.vaultBalanceNear, snapshot.reservedBalanceNear);
 
   return <>
     <PageIntro eyebrow="CONTROL PLANE / 01" title="Overview" description="A clear view of what your AI agents can request—and what the contract will allow." action={<DemoBadge>DEMO ENVIRONMENT</DemoBadge>} />
-    <DataNotice>{isLive ? 'Vault state read from NEAR testnet · activity and authorization data remain demo fixtures' : undefined}</DataNotice>
+    <DataNotice>{isLive ? 'Vault state read from configured NEAR RPC · activity and authorization data remain demo fixtures' : undefined}</DataNotice>
     <AdapterWarning state={vaultRead} />
 
     <Panel className="hero-panel">
       <div className="hero-copy">
         <div className="hero-kicker"><span className="hero-kicker-line" />THE SECURITY BOUNDARY</div>
         <h2>AI can propose.<br /><em>The contract decides.</em></h2>
-        <p>AgentSentry places an independent NEAR smart contract between an AI agent and the vault. Every payment request is checked against owner-defined rules before funds can move.</p>
+        <p>AgentSentry is designed to place an independent NEAR contract between an AI agent and a vault. Contract checks apply only to payment calls made to an initialized deployment.</p>
         <NavLink to="/security" className="text-link">Explore the security controls <Icon name="arrow" size={16} /></NavLink>
       </div>
       <div className="flow-diagram" aria-label="Illustrative payment security flow">
@@ -166,10 +190,10 @@ function OverviewPage({ vaultRead }: { vaultRead: VaultReadResult<VaultStateView
     <ThreatSimulation />
 
     <div className="metrics-grid">
-      <MetricCard label="Vault balance" value={`${snapshot.vaultBalanceNear} NEAR`} note={isLive ? 'NEAR testnet contract balance' : 'Demo contract balance'} icon="wallet" tone="neutral" isLive={isLive} />
+      <MetricCard label="Vault balance" value={`${snapshot.vaultBalanceNear} NEAR`} note={isLive ? 'Configured contract account balance' : 'Demo contract balance'} icon="wallet" tone="neutral" isLive={isLive} />
       <MetricCard label="Reserved" value={`${snapshot.reservedBalanceNear} NEAR`} note="Pending transfer reservation" icon="clock" tone="amber" isLive={isLive} />
       <MetricCard label="Available" value={`${available} NEAR`} note="Derived: balance − reserved" icon="check" tone="green" isLive={isLive} />
-      <MetricCard label="Security status" value={snapshot.frozen ? 'Frozen' : 'Active'} note={isLive ? 'Read from NEAR testnet' : 'Illustrative contract state'} icon="shield" tone="green" isLive={isLive} />
+      <MetricCard label="Security status" value={snapshot.frozen ? 'Frozen' : 'Active'} note={isLive ? 'Read from configured NEAR RPC' : 'Illustrative contract state'} icon="shield" tone="green" isLive={isLive} />
     </div>
 
     <div className="overview-grid">
@@ -185,7 +209,7 @@ function OverviewPage({ vaultRead }: { vaultRead: VaultReadResult<VaultStateView
       </Panel>
     </div>
 
-    <div className="notice-strip"><div className="notice-shield"><Icon name="shield" size={17} /></div><p><strong>Rules are enforced on-chain.</strong> The browser can display requests and statuses; it does not authorize or execute a payment by itself.</p><span className="notice-source">PHASE 2 WALLET CONNECTION PENDING</span></div>
+    <div className="notice-strip"><div className="notice-shield"><Icon name="shield" size={17} /></div><p><strong>Contract enforcement is the intended boundary.</strong> This frontend has no wallet connection or signed payment calls; the simulation is illustrative.</p><span className="notice-source">OWNER CALLS NOT IMPLEMENTED</span></div>
   </>;
 }
 
@@ -225,7 +249,7 @@ function AuthorizationsPage({ records, setRecords }: { records: AuthorizationRec
       setFormNotice('');
       return;
     }
-    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0 || !/^\d+(\.\d{1,24})?$/.test(amount)) {
+    if (!/^\d+(\.\d{1,24})?$/.test(amount) || nearDecimalToYocto(amount) <= 0n) {
       setFormError('Enter a positive amount with up to 24 decimal places.');
       setFormNotice('');
       return;
@@ -326,15 +350,15 @@ function SecurityPage({ vaultRead }: { vaultRead: VaultReadResult<VaultStateView
 
   return <>
     <PageIntro eyebrow="MONITORING / 04" title="Security Center" description="Review contract-reported enforcement signals and unresolved payment state." />
-    <DataNotice>{isLive ? 'Vault state read from NEAR testnet · denial categories and activity remain demo fixtures' : undefined}</DataNotice>
+    <DataNotice>{isLive ? 'Vault state read from configured NEAR RPC · denial categories and activity remain demo fixtures' : undefined}</DataNotice>
     <AdapterWarning state={vaultRead} />
     <Panel className={`security-banner ${snapshot.frozen ? 'security-banner-frozen' : ''}`}>
       <div className="security-banner-icon"><Icon name={snapshot.frozen ? 'lock' : 'shield'} size={22} /></div>
-      <div className="security-banner-copy"><div className="eyebrow">VAULT ENFORCEMENT STATE</div><h2>{snapshot.frozen ? 'Vault frozen' : 'Vault active'}</h2><p>{snapshot.frozen ? 'New payment requests are blocked in this state.' : 'New requests may be evaluated against configured authorizations.'} {isLive ? 'State read from NEAR testnet.' : 'Using illustrative contract state.'}</p></div>
+      <div className="security-banner-copy"><div className="eyebrow">VAULT ENFORCEMENT STATE</div><h2>{snapshot.frozen ? 'Vault frozen' : 'Vault active'}</h2><p>{snapshot.frozen ? 'New payment requests are blocked in this state.' : 'New requests may be evaluated against configured authorizations.'} {isLive ? 'State read from configured NEAR RPC.' : 'Using illustrative contract state.'}</p></div>
       <DemoBadge>{isLive ? 'ON-CHAIN READ' : 'DEMO FIXTURE'}</DemoBadge>
     </Panel>
 
-    <div className="security-metrics"><SecurityMetric label="Consecutive violations" value={`${snapshot.consecutiveViolations} / ${snapshot.maxConsecutiveViolations}`} detail={isLive ? 'Read from NEAR testnet' : 'Illustrative freeze threshold'} tone="amber" source={isLive ? 'ON-CHAIN READ' : 'DEMO FIXTURE'} /><SecurityMetric label="Persisted denials" value={String(snapshot.persistedDenialCount)} detail={isLive ? 'Contract-reported total' : 'Configured-initiator records · demo'} tone="red" source={isLive ? 'ON-CHAIN READ' : 'DEMO FIXTURE'} /><SecurityMetric label="Pending transfer reserve" value="5.00 NEAR" detail="May remain locked if callback fails" tone="amber" source="DEMO FIXTURE" /></div>
+    <div className="security-metrics"><SecurityMetric label="Consecutive violations" value={`${snapshot.consecutiveViolations} / ${snapshot.maxConsecutiveViolations}`} detail={isLive ? 'Read from configured NEAR RPC' : 'Illustrative freeze threshold'} tone="amber" source={isLive ? 'ON-CHAIN READ' : 'DEMO FIXTURE'} /><SecurityMetric label="Persisted denials" value={snapshot.persistedDenialCount} detail={isLive ? 'Contract-reported total' : 'Configured-initiator records · demo'} tone="red" source={isLive ? 'ON-CHAIN READ' : 'DEMO FIXTURE'} /><SecurityMetric label="Pending transfer reserve" value="5.00 NEAR" detail="May remain locked if callback fails" tone="amber" source="DEMO FIXTURE" /></div>
 
     <div className="security-grid">
       <Panel><SectionHeading eyebrow="DENIAL AGGREGATES" title="Why requests were denied" detail="Illustrative per-category counts." /><div className="denial-table">{denialSummary.map((entry) => <div className="denial-table-row" key={entry.category}><span><span className="denial-led" />{entry.category}</span><strong>{entry.count.toString().padStart(2, '0')}</strong><DemoBadge /></div>)}</div><div className="panel-footnote">Persistent contract denial detail is limited to the latest 100 eligible records.</div></Panel>
@@ -353,13 +377,13 @@ function SettingsPage({ vaultRead }: { vaultRead: VaultReadResult<VaultStateView
   const isLive = vaultRead.status === 'available';
   return <>
     <PageIntro eyebrow="CONFIGURATION / 05" title="Vault settings" description="Review the connection context before any owner-authorized action is enabled." />
-    <DataNotice>{isLive ? 'Read-only connection to NEAR testnet · owner operations still require a wallet' : 'Read-only testnet target configured · contract deployment is unverified'}</DataNotice>
+    <DataNotice>{isLive ? 'Read-only connection responding · owner operations still require a wallet' : contractAccountId ? 'Contract account configured but not yet readable' : 'No contract account configured; demo fixtures are shown'}</DataNotice>
     <AdapterWarning state={vaultRead} />
     <div className="settings-grid">
       <Panel className="settings-panel"><SectionHeading eyebrow="CONNECTION" title="Wallet & network" detail="Wallet actions will be added in Phase 2." />
         <div className="setting-row"><div className="setting-icon"><Icon name="wallet" size={18} /></div><div><strong>Owner wallet</strong><span>No wallet connected</span></div><span className="setting-state">NOT CONNECTED</span></div>
-        <div className="setting-row"><div className="setting-icon"><Icon name="external" size={17} /></div><div><strong>Network</strong><span>NEAR testnet · read-only RPC</span></div><span className="setting-state">{isLive ? 'RESPONDING' : 'READ ONLY'}</span></div>
-        <div className="setting-row"><div className="setting-icon"><Icon name="shield" size={18} /></div><div><strong>Contract account</strong><span>agentsentry-owner.testnet</span></div><span className="setting-state">{isLive ? 'READABLE' : 'UNVERIFIED'}</span></div>
+        <div className="setting-row"><div className="setting-icon"><Icon name="external" size={17} /></div><div><strong>RPC endpoint</strong><span>{rpcEndpoint}</span></div><span className="setting-state">{isLive ? 'RESPONDING' : contractAccountId ? 'UNAVAILABLE' : 'READ ONLY'}</span></div>
+        <div className="setting-row"><div className="setting-icon"><Icon name="shield" size={18} /></div><div><strong>Contract account</strong><span>{contractAccountId || 'Not configured'}</span></div><span className="setting-state">{isLive ? 'READABLE' : contractAccountId ? 'UNVERIFIED' : 'NOT CONFIGURED'}</span></div>
         <div className="settings-note"><Icon name="alert" size={16} /><p>No wallet is connected and no owner operation is enabled. Contract reads are public; demo fixtures remain visible when live state is unavailable.</p></div>
       </Panel>
       <Panel className="settings-panel"><SectionHeading eyebrow="OWNER CONTROLS" title="Vault operations" detail="Unavailable until wallet and contract integration are configured." />

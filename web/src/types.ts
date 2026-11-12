@@ -7,7 +7,7 @@ export interface VaultSnapshot {
   frozen: boolean;
   consecutiveViolations: number;
   maxConsecutiveViolations: number;
-  persistedDenialCount: number;
+  persistedDenialCount: string;
 }
 
 /** JSON schema returned by AgentSentryVault::get_vault_state. */
@@ -18,10 +18,10 @@ export interface VaultStateView {
   is_frozen: boolean;
   consecutive_violations: number;
   max_consecutive_violations: number;
-  total_denials_logged: number;
-  denial_records_evicted: number;
-  oldest_denial_index: number;
-  denial_counts: Record<string, number>;
+  total_denials_logged: string;
+  denial_records_evicted: string;
+  oldest_denial_index: string;
+  denial_counts: Record<string, string>;
 }
 
 export interface AuthorizationView {
@@ -32,7 +32,7 @@ export interface AuthorizationView {
   expires_at_ns: string;
   nonce: string;
   used: boolean;
-  pending_transfer_id: number | null;
+  pending_transfer_id: string | null;
   revoked: boolean;
   created_at_ns: string;
 }
@@ -50,13 +50,13 @@ export interface DenialRecordView {
 
 export type VaultReadResult<T> =
   | { status: 'available'; value: T }
-  | { status: 'unavailable'; reason: 'rpc-error' | 'contract-error'; message?: string };
+  | { status: 'unavailable'; reason: 'rpc-error' | 'contract-error' | 'not-configured'; message?: string };
 
 /** Read-only boundary for public AgentSentry contract views. */
 export interface VaultReadAdapter {
   getVaultState(): Promise<VaultReadResult<VaultStateView>>;
   getAuthorization(authId: string): Promise<VaultReadResult<AuthorizationView | null>>;
-  getDenialLog(fromIndex?: number, limit?: number): Promise<VaultReadResult<DenialRecordView[]>>;
+  getDenialLog(fromIndex?: string, limit?: string): Promise<VaultReadResult<DenialRecordView[]>>;
 }
 
 export interface AuthorizationRecord {

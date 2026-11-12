@@ -64,6 +64,39 @@ pub struct DenialCounters {
     pub other: u64,
 }
 
+/// JSON-safe representation of u64 denial counters for browser clients.
+#[near(serializers = [json])]
+#[derive(Clone)]
+pub struct DenialCountersView {
+    pub invalid_amount: U64,
+    pub vault_frozen: U64,
+    pub auth_not_found: U64,
+    pub auth_revoked: U64,
+    pub auth_already_used: U64,
+    pub auth_expired: U64,
+    pub recipient_not_approved: U64,
+    pub amount_exceeded: U64,
+    pub insufficient_vault_balance: U64,
+    pub other: U64,
+}
+
+impl From<&DenialCounters> for DenialCountersView {
+    fn from(counters: &DenialCounters) -> Self {
+        Self {
+            invalid_amount: U64(counters.invalid_amount),
+            vault_frozen: U64(counters.vault_frozen),
+            auth_not_found: U64(counters.auth_not_found),
+            auth_revoked: U64(counters.auth_revoked),
+            auth_already_used: U64(counters.auth_already_used),
+            auth_expired: U64(counters.auth_expired),
+            recipient_not_approved: U64(counters.recipient_not_approved),
+            amount_exceeded: U64(counters.amount_exceeded),
+            insufficient_vault_balance: U64(counters.insufficient_vault_balance),
+            other: U64(counters.other),
+        }
+    }
+}
+
 impl DenialCounters {
     fn increment(&mut self, error_code: &str) {
         let counter = match error_code {
@@ -102,10 +135,10 @@ pub struct VaultStateView {
     pub is_frozen: bool,
     pub consecutive_violations: u32,
     pub max_consecutive_violations: u32,
-    pub total_denials_logged: u64,
-    pub denial_records_evicted: u64,
-    pub oldest_denial_index: u64,
-    pub denial_counts: DenialCounters,
+    pub total_denials_logged: U64,
+    pub denial_records_evicted: U64,
+    pub oldest_denial_index: U64,
+    pub denial_counts: DenialCountersView,
 }
 
 #[near(serializers = [json])]
@@ -117,7 +150,7 @@ pub struct AuthorizationView {
     pub expires_at_ns: U64,
     pub nonce: String,
     pub used: bool,
-    pub pending_transfer_id: Option<u64>,
+    pub pending_transfer_id: Option<U64>,
     pub revoked: bool,
     pub created_at_ns: U64,
 }
@@ -548,14 +581,16 @@ impl AgentSentryVault {
             is_frozen: self.is_frozen,
             consecutive_violations: self.consecutive_violations,
             max_consecutive_violations: self.max_consecutive_violations,
-            total_denials_logged: self.total_denials_logged,
-            denial_records_evicted: self
-                .total_denials_logged
-                .saturating_sub(self.denial_log.len()),
-            oldest_denial_index: self
-                .total_denials_logged
-                .saturating_sub(self.denial_log.len()),
-            denial_counts: self.denial_counts.clone(),
+            total_denials_logged: U64(self.total_denials_logged),
+            denial_records_evicted: U64(
+                self.total_denials_logged
+                    .saturating_sub(self.denial_log.len()),
+            ),
+            oldest_denial_index: U64(
+                self.total_denials_logged
+                    .saturating_sub(self.denial_log.len()),
+            ),
+            denial_counts: DenialCountersView::from(&self.denial_counts),
         }
     }
 
@@ -568,22 +603,22 @@ impl AgentSentryVault {
             expires_at_ns: U64(a.expires_at_ns),
             nonce: a.nonce,
             used: a.used,
-            pending_transfer_id: a.pending_transfer_id,
+            pending_transfer_id: a.pending_transfer_id.map(U64),
             revoked: a.revoked,
             created_at_ns: U64(a.created_at_ns),
         })
     }
 
-    pub fn get_denial_log(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<DenialRecord> {
+    pub fn get_denial_log(&self, from_index: Option<U64>, limit: Option<U64>) -> Vec<DenialRecord> {
         let oldest_retained = self
             .total_denials_logged
             .saturating_sub(self.denial_log.len());
         // Indices are absolute record sequence numbers. A cursor older than
         // the retained window starts at the oldest available record; callers
         // can detect the gap through get_vault_state().oldest_denial_index.
-        let start = from_index.unwrap_or(oldest_retained).max(oldest_retained);
+        let start = from_index.map(|index| index.0).unwrap_or(oldest_retained).max(oldest_retained);
         let end = std::cmp::min(
-            start.saturating_add(limit.unwrap_or(50)),
+            start.saturating_add(limit.map(|value| value.0).unwrap_or(50)),
             self.total_denials_logged,
         );
         (start..end)
@@ -906,7 +941,8 @@ mod tests {
             .get_authorization(success_id.clone())
             .unwrap()
             .pending_transfer_id
-            .unwrap();
+            .unwrap()
+            .0;
         builder.predecessor_account_id(vault_account());
         testing_env_with_promise_results(builder.build(), MockPromiseResult::Successful(vec![]));
         assert!(vault.on_transfer_complete(success_id.clone(), transfer_id));
@@ -932,7 +968,8 @@ mod tests {
             .get_authorization(failed_id.clone())
             .unwrap()
             .pending_transfer_id
-            .unwrap();
+            .unwrap()
+            .0;
         builder.predecessor_account_id(vault_account());
         testing_env_with_promise_results(builder.build(), MockPromiseResult::Failed);
         assert!(vault.on_transfer_complete(failed_id.clone(), failed_transfer_id));
@@ -1059,13 +1096,13 @@ mod tests {
         let state = vault.get_vault_state();
         assert!(state.is_frozen, "auto-freeze must still trip at the threshold");
         assert_eq!(state.consecutive_violations, total_attempts as u32);
-        assert_eq!(state.total_denials_logged, total_attempts);
-        assert_eq!(state.denial_records_evicted, 5);
-        assert_eq!(state.oldest_denial_index, 5);
-        assert_eq!(state.denial_counts.recipient_not_approved, 3);
-        assert_eq!(state.denial_counts.vault_frozen, total_attempts - 3);
+        assert_eq!(state.total_denials_logged.0, total_attempts);
+        assert_eq!(state.denial_records_evicted.0, 5);
+        assert_eq!(state.oldest_denial_index.0, 5);
+        assert_eq!(state.denial_counts.recipient_not_approved.0, 3);
+        assert_eq!(state.denial_counts.vault_frozen.0, total_attempts - 3);
 
-        let retained = vault.get_denial_log(Some(0), Some(DENIAL_LOG_CAPACITY));
+        let retained = vault.get_denial_log(Some(U64(0)), Some(U64(DENIAL_LOG_CAPACITY)));
         assert_eq!(retained.len(), DENIAL_LOG_CAPACITY as usize);
         assert_eq!(retained[0].attempted_amount.0, 6);
         assert_eq!(retained[DENIAL_LOG_CAPACITY as usize - 1].attempted_amount.0, total_attempts as u128);
@@ -1073,6 +1110,32 @@ mod tests {
         let latest_denial = latest_event("payment_denied");
         assert_eq!(latest_denial["denial_sequence"].as_u64(), Some(total_attempts - 1));
         assert_eq!(latest_denial["denial_records_evicted"].as_u64(), Some(5));
+    }
+
+    #[test]
+    fn test_u64_view_values_serialize_as_decimal_strings() {
+        let (_builder, mut vault) = setup_context();
+        vault.total_denials_logged = u64::MAX;
+        vault.denial_counts.invalid_amount = u64::MAX;
+
+        let state = serde_json::to_value(vault.get_vault_state()).unwrap();
+        let max = u64::MAX.to_string();
+        assert_eq!(state["total_denials_logged"].as_str(), Some(max.as_str()));
+        assert_eq!(state["denial_records_evicted"].as_str(), Some(max.as_str()));
+        assert_eq!(state["oldest_denial_index"].as_str(), Some(max.as_str()));
+        assert_eq!(state["denial_counts"]["invalid_amount"].as_str(), Some(max.as_str()));
+
+        let mut auth = vault.authorizations.get(&"auth_001".to_string()).unwrap();
+        auth.pending_transfer_id = Some(u64::MAX);
+        vault.authorizations.insert(&"auth_001".to_string(), &auth);
+        let authorization = serde_json::to_value(
+            vault.get_authorization("auth_001".to_string()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            authorization["pending_transfer_id"].as_str(),
+            Some(max.as_str())
+        );
     }
 
     #[test]
@@ -1128,7 +1191,8 @@ mod tests {
             .get_authorization("auth_001".to_string())
             .unwrap()
             .pending_transfer_id
-            .unwrap();
+            .unwrap()
+            .0;
         assert_eq!(vault.reserved_balance_yocto, 5_000_000_000_000_000_000_000_000);
 
         builder.predecessor_account_id(vault_account());
@@ -1156,7 +1220,8 @@ mod tests {
             .get_authorization("auth_001".to_string())
             .unwrap()
             .pending_transfer_id
-            .unwrap();
+            .unwrap()
+            .0;
         assert_ne!(retry_id, transfer_id);
         assert_eq!(vault.reserved_balance_yocto, 5_000_000_000_000_000_000_000_000);
 
@@ -1166,7 +1231,7 @@ mod tests {
         assert_eq!(vault.reserved_balance_yocto, 5_000_000_000_000_000_000_000_000);
         assert_eq!(
             vault.get_authorization("auth_001".to_string()).unwrap().pending_transfer_id,
-            Some(retry_id)
+            Some(U64(retry_id))
         );
     }
 
@@ -1187,7 +1252,8 @@ mod tests {
             .get_authorization("auth_001".to_string())
             .unwrap()
             .pending_transfer_id
-            .unwrap();
+            .unwrap()
+            .0;
         let reserved = vault.reserved_balance_yocto;
 
         // A callback without exactly one promise result cannot settle. In the
@@ -1198,7 +1264,7 @@ mod tests {
         assert!(!vault.on_transfer_complete("auth_001".to_string(), transfer_id));
         let auth = vault.get_authorization("auth_001".to_string()).unwrap();
         assert!(auth.used);
-        assert_eq!(auth.pending_transfer_id, Some(transfer_id));
+        assert_eq!(auth.pending_transfer_id, Some(U64(transfer_id)));
         assert_eq!(vault.reserved_balance_yocto, reserved);
         assert!(vault.pending_transfers.get(&transfer_id).is_some());
     }
@@ -1219,7 +1285,8 @@ mod tests {
             .get_authorization("auth_001".to_string())
             .unwrap()
             .pending_transfer_id
-            .unwrap();
+            .unwrap()
+            .0;
 
         builder.predecessor_account_id(owner());
         testing_env!(builder.build());
