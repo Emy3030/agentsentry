@@ -25,7 +25,7 @@ jobs:
         run: cargo test --locked --features integration-tests
 
       - name: Run standalone validator tests
-        run: cargo test --locked -p agent-sentry-validator --lib
+        run: cargo test --locked -p bastionpro-validator --lib
 
       - name: Build NEAR contract WASM
         run: cargo build --locked --release --target wasm32-unknown-unknown

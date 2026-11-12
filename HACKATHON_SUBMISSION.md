@@ -1,16 +1,18 @@
-# AgentSentry — NEAR Payment Security for AI Agents
+# BastionPro — NEAR Payment Security for AI Agents
 
 ## Product
 
-AgentSentry is an MVP for an owner-controlled payment boundary around AI-driven agents. The design lets an agent request a payment while the NEAR contract checks the request against a scoped authorization. The frontend's attack scenario is an illustrative, local simulation; it does not prove a live contract rejection.
+BastionPro is an MVP for an owner-controlled payment boundary around AI-driven agents. The design lets an agent request a payment while the NEAR contract checks the request against a scoped authorization. The frontend's attack scenario is an illustrative, local simulation; it does not prove a live contract rejection.
 
 ## Why NEAR
 
 NEAR account FunctionCall access keys can be restricted to a receiver contract and permitted methods, so an agent can be given scoped call authority without the owner's unrestricted account key. NEAR promises also support asynchronous settlement: the contract reserves the amount, dispatches a native transfer, and processes the result through a private callback. Owners must configure access keys themselves; wallet integration is not included here.
 
+The owner approves an authorization before the agent signs a payment-call transaction. At execution time, the contract independently validates that request before scheduling a transfer. This is pre-transfer on-chain enforcement, not a frontend pre-signature filter. The current application does not intercept wallet signing.
+
 ## Architecture and policy
 
-- The Rust contract in `src/lib.rs` is the intended on-chain authority.
+- The Rust contract in `src/lib.rs` is the intended on-chain authority. Its policy checks run on NEAR before a native transfer is scheduled.
 - The owner creates an authorization binding one initiator to an approved recipient, amount ceiling, expiry, and single-use rule.
 - A request that passes validation reserves the balance and returns `PENDING`; the callback later marks it executed or failed.
 - Recipient mismatch and other eligible denials return `DENIED` without scheduling a transfer. Persistent denial details are bounded to 100 records.
@@ -31,7 +33,7 @@ To opt into public vault-state reads, copy `web/.env.example` to `web/.env.local
 
 ```sh
 npm test
-cargo test --locked -p agent-sentry-validator --lib
+cargo test --locked -p bastionpro-validator --lib
 cargo test --locked --features integration-tests
 npm run build
 cargo build --locked --release --target wasm32-unknown-unknown

@@ -1,5 +1,5 @@
 /**
- * [SIMULATION / REFERENCE MODEL] AgentSentry Vault Contract Logic
+ * [SIMULATION / REFERENCE MODEL] BastionPro Vault Contract Logic
  *
  * NOTE: This JavaScript file is a behavioral simulation and specification model.
  * It is NOT a compiled NEAR WebAssembly smart contract.
@@ -15,7 +15,7 @@
  * - Owner controls authorizations, freezing, unfreezing, and treasury withdrawals.
  */
 
-export class AgentSentryVault {
+export class BastionProVault {
   /**
    * Initializes the vault.
    * @param {Object} params

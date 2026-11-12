@@ -1,5 +1,5 @@
 // =============================================================================
-// AgentSentry Payment Validator — Pure Rule Engine
+// BastionPro Payment Validator — Pure Rule Engine
 // =============================================================================
 // This module contains ONLY deterministic, pure-Rust validation logic.
 // It has NO dependencies on near-sdk host functions (env::*).
@@ -38,7 +38,7 @@ pub struct AuthSnapshot {
     pub revoked: bool,
 }
 
-/// Run all AgentSentry payment validation checks deterministically.
+/// Run all BastionPro payment validation checks deterministically.
 /// Parameters use primitive types only — no NEAR SDK types.
 ///
 /// Checks in order:

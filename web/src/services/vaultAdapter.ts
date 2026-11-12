@@ -11,7 +11,7 @@ interface NearRpcResponse {
   error?: { code?: number; message?: string };
 }
 
-/** Read-only JSON-RPC adapter for the public AgentSentry contract views. */
+/** Read-only JSON-RPC adapter for the public BastionPro contract views. */
 export class LiveRpcReadAdapter implements VaultReadAdapter {
   constructor(
     private readonly rpcEndpoint: string,
@@ -47,7 +47,7 @@ export class LiveRpcReadAdapter implements VaultReadAdapter {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           jsonrpc: '2.0',
-          id: 'agentsentry-read',
+          id: 'bastionpro-read',
           method: 'query',
           params: {
             request_type: 'call_function',

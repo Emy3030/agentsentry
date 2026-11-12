@@ -10,7 +10,7 @@ export interface VaultSnapshot {
   persistedDenialCount: string;
 }
 
-/** JSON schema returned by AgentSentryVault::get_vault_state. */
+/** JSON schema returned by BastionProVault::get_vault_state. */
 export interface VaultStateView {
   owner_id: string;
   vault_balance: string;
@@ -52,7 +52,7 @@ export type VaultReadResult<T> =
   | { status: 'available'; value: T }
   | { status: 'unavailable'; reason: 'rpc-error' | 'contract-error' | 'not-configured'; message?: string };
 
-/** Read-only boundary for public AgentSentry contract views. */
+/** Read-only boundary for public BastionPro contract views. */
 export interface VaultReadAdapter {
   getVaultState(): Promise<VaultReadResult<VaultStateView>>;
   getAuthorization(authId: string): Promise<VaultReadResult<AuthorizationView | null>>;

@@ -1,12 +1,16 @@
-# AgentSentry: AI Agent Payment Security on NEAR
+# BastionPro: AI Agent Payment Security on NEAR
 
-AgentSentry is an MVP exploring an owner-controlled payment boundary for AI-driven agents. The Rust NEAR contract checks payment requests against on-chain authorization rules. The frontend includes an illustrative threat simulation and a read-only vault-state adapter; it does not submit wallet transactions.
+BastionPro is an MVP exploring an owner-controlled payment boundary for AI-driven agents. The Rust NEAR contract checks payment requests against on-chain authorization rules. The frontend includes an illustrative threat simulation and a read-only vault-state adapter; it does not submit wallet transactions.
 
 > **Status:** The contract has not been verified as deployed. The frontend simulation is local and does not call the Rust contract. Do not interpret the demo as evidence of a live on-chain payment or rejection.
 
 ## Why NEAR
 
-NEAR provides two capabilities used in AgentSentry's design: account-level FunctionCall access keys can limit an agent key to a contract receiver and allowed methods, and asynchronous promises let the contract reserve funds before dispatching a native transfer and settle the result in a private callback. Owners must configure any access-key restrictions themselves; this repository does not create keys or connect a wallet. Callback failure remains fail-closed and may lock the reservation indefinitely.
+NEAR provides two capabilities used in BastionPro's design: account-level FunctionCall access keys can limit an agent key to a contract receiver and allowed methods, and asynchronous promises let the contract reserve funds before dispatching a native transfer and settle the result in a private callback. Owners must configure any access-key restrictions themselves; this repository does not create keys or connect a wallet. Callback failure remains fail-closed and may lock the reservation indefinitely.
+
+## Pre-signing policy and on-chain enforcement
+
+The owner approves a scoped authorization before an agent payment call is signed: the rule binds the approved initiator, recipient, amount ceiling, expiry, and single-use authorization ID. During transaction execution, the NEAR contract independently checks the signed request before scheduling any native transfer. This is pre-transfer enforcement; the current frontend does not intercept or validate a wallet signature before it is created. A rejected request cannot cause the contract to transfer funds, though a signed call can still incur transaction costs.
 
 ## How the contract is designed to work
 
@@ -31,9 +35,9 @@ NEAR FunctionCall access keys can be scoped to contract methods, but this reposi
 ## Repository layout
 
 - `src/lib.rs` — NEAR Rust contract and feature-gated integration tests.
-- `crates/agent-sentry-validator/` — dependency-free Rust payment-rule validator and unit tests.
+- `crates/bastion-pro-validator/` — dependency-free Rust payment-rule validator and unit tests.
 - `contracts/` — JavaScript reference/simulation code, not the deployed contract.
-- `tests/agent_sentry.test.js` — JavaScript simulation tests, not NEAR contract tests.
+- `tests/bastion_pro.test.js` — JavaScript simulation tests, not NEAR contract tests.
 - `web/` — React, TypeScript, and Vite frontend.
 - `.github/workflows/contract-tests.yml` — Ubuntu workflow configured for contract tests, validator tests, and WASM build.
 
@@ -62,7 +66,7 @@ Run the JavaScript reference simulation and standalone Rust validator:
 
 ```sh
 npm test
-cargo test --locked -p agent-sentry-validator --lib
+cargo test --locked -p bastionpro-validator --lib
 ```
 
 The JavaScript tests exercise the simulation only. To run the actual NEAR contract integration tests, use a Linux environment or a Windows C/GNU toolchain that supplies the required `dlltool.exe`:
@@ -84,17 +88,18 @@ The build script performs `tsc --noEmit` followed by the Vite production build. 
 cargo build --locked --release --target wasm32-unknown-unknown
 ```
 
-The default artifact path is `target/wasm32-unknown-unknown/release/agent_sentry_vault.wasm`.
+The default artifact path is `target/wasm32-unknown-unknown/release/bastionpro_vault.wasm`.
 
 ## Current verification status
 
 Last local verification: **2026-11-12**.
 
-- **JavaScript simulation:** 9/9 tests passed using `node --test --test-isolation=none tests/agent_sentry.test.js`. Plain `npm test` exited 1 in this restricted Windows runner because Node could not spawn its test worker (`spawn EPERM`); no test assertions ran under that command.
-- **Rust validator:** 20/20 tests passed with `cargo test --locked -p agent-sentry-validator --lib`.
-- **NEAR contract integration tests:** Not run. Compilation stopped because `dlltool.exe` was unavailable. There is no usable local Linux distribution. The Ubuntu GitHub Actions workflow is configured, but has not been triggered or verified.
-- **Frontend:** `tsc --noEmit` passed. The Vite production build was blocked in this runner by `spawn EPERM` while Vite resolved its configuration. This is not a successful production build result.
-- **WASM:** Release build passed in a temporary Cargo target directory. Artifact size: **322,420 bytes**. SHA-256: `4D392DA1AF7AA7A0BCF8830CAC28CD2F5887B8365FC326094D4025E785D91A48`. The existing `target/` artifact is 322,554 bytes with a different hash; it was preserved and should be replaced only by a deliberate build.
+- **JavaScript simulation:** 9/9 tests passed using `npm.cmd test`.
+- **Rust validator:** 20/20 tests passed with `cargo test --locked -p bastionpro-validator --lib`.
+- **NEAR contract integration tests:** Blocked. `cargo test --locked --features integration-tests` stopped because `dlltool.exe` is unavailable. The Ubuntu GitHub Actions workflow is configured, but has not been triggered or verified.
+- **Workspace Rust tests:** `cargo test --locked --workspace` is also blocked while compiling native dependencies because `dlltool.exe` is unavailable.
+- **Frontend:** `npm.cmd run build` passed, including `tsc --noEmit` and the Vite production build.
+- **WASM:** `cargo build --locked --release --target wasm32-unknown-unknown` passed from the current renamed source. Artifact: `target/wasm32-unknown-unknown/release/bastionpro_vault.wasm`, **321,754 bytes**, SHA-256 `782410965C56B96C44A60EBC6F75A833C0FB37879E5217665E1C66EF67DF322C`.
 - **Network:** No account, contract deployment, wallet connection, RPC read, signed call, or testnet/mainnet transaction has been verified. The frontend ships with no contract account ID; configure one only after verifying a deployed and initialized contract.
 
 ## License

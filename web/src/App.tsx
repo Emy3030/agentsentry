@@ -80,7 +80,7 @@ function App() {
         <header className="topbar">
           <div className="topbar-left">
             <button className="mobile-menu" onClick={() => setMobileNavOpen(true)} aria-label="Open navigation"><span /><span /><span /></button>
-            <div className="breadcrumbs"><span>AGENTSENTRY</span><Icon name="chevron" size={13} /><strong>{pageTitle.toUpperCase()}</strong></div>
+            <div className="breadcrumbs"><span>BASTIONPRO</span><Icon name="chevron" size={13} /><strong>{pageTitle.toUpperCase()}</strong></div>
           </div>
           <div className="topbar-right">
             <div className="network-state"><span className="network-dot" /><span>Wallet not connected</span></div>
@@ -173,13 +173,13 @@ function OverviewPage({ vaultRead }: { vaultRead: VaultReadResult<VaultStateView
       <div className="hero-copy">
         <div className="hero-kicker"><span className="hero-kicker-line" />THE SECURITY BOUNDARY</div>
         <h2>AI can propose.<br /><em>The contract decides.</em></h2>
-        <p>AgentSentry is designed to place an independent NEAR contract between an AI agent and a vault. Contract checks apply only to payment calls made to an initialized deployment.</p>
+        <p>BastionPro is designed to place an independent NEAR contract between an AI agent and a vault. Contract checks apply only to payment calls made to an initialized deployment.</p>
         <NavLink to="/security" className="text-link">Explore the security controls <Icon name="arrow" size={16} /></NavLink>
       </div>
       <div className="flow-diagram" aria-label="Illustrative payment security flow">
         <FlowNode number="01" title="AI agent" detail="Proposes a payment" icon="spark" tone="muted" />
         <div className="flow-connector"><span /><span /><span /></div>
-        <FlowNode number="02" title="AgentSentry" detail="Checks owner rules" icon="shield" tone="accent" />
+        <FlowNode number="02" title="BastionPro" detail="Checks owner rules" icon="shield" tone="accent" />
         <div className="flow-connector"><span /><span /><span /></div>
         <FlowNode number="03" title="NEAR contract" detail="Enforces the decision" icon="lock" tone="accent" />
         <div className="flow-outcomes"><div><span className="outcome-dot outcome-green" />Approved → payment can proceed</div><div><span className="outcome-dot outcome-red" />Mismatch → request is denied</div></div>
@@ -392,7 +392,7 @@ function SettingsPage({ vaultRead }: { vaultRead: VaultReadResult<VaultStateView
         <div className="operation-disclaimer">These controls are intentionally disabled. No operation has been submitted or represented as successful.</div>
       </Panel>
     </div>
-    <Panel className="settings-security-note"><div className="notice-shield"><Icon name="shield" size={17} /></div><div><strong>Keep agent authority scoped.</strong><p>AgentSentry is designed to enforce payment rules in the contract. The agent must not receive the owner’s unrestricted wallet credentials.</p></div><DemoBadge /></Panel>
+    <Panel className="settings-security-note"><div className="notice-shield"><Icon name="shield" size={17} /></div><div><strong>Keep agent authority scoped.</strong><p>BastionPro is designed to enforce payment rules in the contract. The agent must not receive the owner’s unrestricted wallet credentials.</p></div><DemoBadge /></Panel>
   </>;
 }
 

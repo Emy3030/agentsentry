@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AgentSentryVault } from '../contracts/agent_sentry_vault.js';
+import { BastionProVault } from '../contracts/bastion_pro_vault.js';
 import {
   NearAccount,
   NearProtocolRuntime,
@@ -12,7 +12,7 @@ const OWNER_ID = 'acme_corp.testnet';
 const AGENT_ID = 'procurement_agent.testnet';
 const APPROVED_RECIPIENT = 'aws_cloud_services.testnet';
 const ATTACKER_RECIPIENT = 'malicious_hacker.testnet';
-const VAULT_ID = 'agent_sentry_vault.testnet';
+const VAULT_ID = 'bastionpro-vault.testnet';
 
 // 1 NEAR = 10^24 yoctoNEAR
 const ONE_NEAR = 1_000_000_000_000_000_000_000_000n;
@@ -23,10 +23,10 @@ const MAX_AUTHORIZED_AMOUNT = 10n * ONE_NEAR;  // 10 NEAR
 const T_BASE = 1_700_000_000_000_000_000n; // arbitrary base timestamp
 const T_EXPIRY = T_BASE + 3600_000_000_000n; // +1 hour
 
-test('[SIMULATION] AgentSentry Phase 1 Reference Behavioral Suite', async (t) => {
+test('[SIMULATION] BastionPro Reference Behavioral Suite', async (t) => {
   // Setup fresh vault fixture for each test
   function setupVault() {
-    const vault = new AgentSentryVault({
+    const vault = new BastionProVault({
       owner_id: OWNER_ID,
       initial_balance: INITIAL_VAULT_BALANCE,
       max_consecutive_violations: 3

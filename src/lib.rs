@@ -1,4 +1,4 @@
-pub use agent_sentry_validator as validator;
+pub use bastionpro_validator as validator;
 
 use near_sdk::collections::{LookupMap, Vector};
 use near_sdk::json_types::{U128, U64};
@@ -157,7 +157,7 @@ pub struct AuthorizationView {
 
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
-pub struct AgentSentryVault {
+pub struct BastionProVault {
     pub owner_id: AccountId,
     pub is_frozen: bool,
     pub consecutive_violations: u32,
@@ -175,7 +175,7 @@ pub struct AgentSentryVault {
 }
 
 #[near]
-impl AgentSentryVault {
+impl BastionProVault {
     /// Initializes the vault for the account that directly calls `new`.
     /// Deployment and initialization must be submitted atomically by the
     /// intended owner so nobody else can initialize an empty contract first.
@@ -736,7 +736,7 @@ fn log_contract_event(event: &str, fields: serde_json::Value) {
             "ERR_EVENT_RESERVED_FIELD"
         );
     }
-    payload.insert("standard".to_string(), serde_json::json!("agentsentry"));
+    payload.insert("standard".to_string(), serde_json::json!("bastionpro"));
     payload.insert("version".to_string(), serde_json::json!("1.0.0"));
     payload.insert("event".to_string(), serde_json::json!(event));
 
@@ -773,7 +773,7 @@ mod tests {
         "attacker.near".parse().unwrap()
     }
     fn vault_account() -> AccountId {
-        "agent_sentry_vault.near".parse().unwrap()
+        "bastionpro-vault.near".parse().unwrap()
     }
 
     #[test]
@@ -786,7 +786,7 @@ mod tests {
             .predecessor_account_id(owner());
         testing_env!(builder.build());
 
-        let vault = AgentSentryVault::new(owner(), Some(3));
+        let vault = BastionProVault::new(owner(), Some(3));
         assert_eq!(vault.owner_id, owner());
         assert!(!vault.state_write());
         assert!(env::state_exists());
@@ -801,14 +801,14 @@ mod tests {
         testing_env!(builder.build());
 
         let rejected = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            AgentSentryVault::new(owner(), Some(3))
+            BastionProVault::new(owner(), Some(3))
         }));
         assert!(rejected.is_err());
         assert!(!env::state_exists());
 
         builder.predecessor_account_id(owner());
         testing_env!(builder.build());
-        let vault = AgentSentryVault::new(owner(), Some(3));
+        let vault = BastionProVault::new(owner(), Some(3));
         assert_eq!(vault.owner_id, owner());
     }
 
@@ -822,32 +822,32 @@ mod tests {
             .predecessor_account_id(owner());
         testing_env!(builder.build());
 
-        let vault = AgentSentryVault::new(owner(), Some(3));
+        let vault = BastionProVault::new(owner(), Some(3));
         assert_eq!(vault.owner_id, owner());
         assert!(!vault.state_write());
 
         builder.predecessor_account_id(attacker());
         testing_env!(builder.build());
         let rejected = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            AgentSentryVault::new(attacker(), Some(3))
+            BastionProVault::new(attacker(), Some(3))
         }));
         assert!(rejected.is_err());
 
         let stored_vault =
-            AgentSentryVault::state_read().expect("initialized state remains present");
+            BastionProVault::state_read().expect("initialized state remains present");
         assert_eq!(stored_vault.owner_id, owner());
     }
 
-    fn setup_context() -> (VMContextBuilder, AgentSentryVault) {
+    fn setup_context() -> (VMContextBuilder, BastionProVault) {
         let mut builder = VMContextBuilder::new();
         builder
-            .current_account_id("agent_sentry_vault.near".parse().unwrap())
+            .current_account_id("bastionpro-vault.near".parse().unwrap())
             .predecessor_account_id(owner())
             .account_balance(NearToken::from_near(100))
             .block_timestamp(1_700_000_000_000_000_000); // T_BASE
 
         testing_env!(builder.build());
-        let mut vault = AgentSentryVault::new(owner(), Some(3));
+        let mut vault = BastionProVault::new(owner(), Some(3));
 
         // Authorize payment for AWS
         vault.authorize_payment(

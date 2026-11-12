@@ -9,14 +9,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe438c63458706e03479442743baae6c88256498e6431708f6dfc520a26515d3"
 
 [[package]]
-name = "agent-sentry-validator"
+name = "bastionpro-validator"
 version = "0.1.0"
 
 [[package]]
-name = "agent-sentry-vault"
+name = "bastionpro-vault"
 version = "0.1.0"
 dependencies = [
- "agent-sentry-validator",
+ "bastionpro-validator",
  "borsh",
  "near-sdk",
  "serde",
