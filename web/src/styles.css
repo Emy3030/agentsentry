@@ -35,7 +35,8 @@ a { color: inherit; text-decoration: none; }
 /* Application shell */
 .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 20; display: flex; flex-direction: column; width: 246px; padding: 24px 16px 16px; background: #0e1214; border-right: 1px solid var(--border-soft); }
 .brand-lockup { display: flex; align-items: center; gap: 11px; padding: 0 9px 33px; }
-.brand-mark { display: grid; width: 36px; height: 36px; place-items: center; color: #86e1bf; background: #173329; border: 1px solid #275342; border-radius: 11px; }
+.brand-mark { position: relative; display: grid; width: 36px; height: 36px; place-items: center; color: #86e1bf; background: #173329; border: 1px solid #275342; border-radius: 11px; }
+.brand-monogram { position: absolute; top: 13px; left: 0; width: 100%; color: #b6f0dc; font: 800 7px/1 'Manrope', sans-serif; letter-spacing: -.5px; text-align: center; }
 .brand-name { font: 800 18px/1 'Manrope', sans-serif; letter-spacing: -.65px; color: #e9efed; }
 .brand-name > span { color: #88dbb9; }
 .brand-name small { display: block; margin-top: 6px; color: #72807c; font: 500 8px/1 'DM Mono', monospace; letter-spacing: 1.35px; }

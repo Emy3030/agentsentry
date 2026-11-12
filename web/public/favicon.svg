@@ -1,7 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BastionPro">
   <rect width="64" height="64" rx="14" fill="#0b0e10"/>
-  <path d="M32 8 51 15v14c0 13-7.8 22.4-19 28C20.8 51.4 13 42 13 29V15l19-7Z"
+  <path d="M32 7 52 14v15c0 13.5-8 23.4-20 29C20 52.4 12 42.5 12 29V14l20-7Z"
         fill="#111918" stroke="#62d6ae" stroke-width="3" stroke-linejoin="round"/>
-  <path d="m23 32 6 6 13-14" fill="none" stroke="#9ae8d0" stroke-width="4"
-        stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="32" y="37" fill="#b6f0dc" font-family="Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="-1" text-anchor="middle">BP</text>
 </svg>

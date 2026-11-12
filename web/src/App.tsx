@@ -51,8 +51,8 @@ function App() {
     <div className="app-shell">
       <aside className={`sidebar ${mobileNavOpen ? 'sidebar-open' : ''}`}>
       <div className="brand-lockup">
-          <div className="brand-mark"><Icon name="shield" size={21} /></div>
-          <div className="brand-name">Agent<span>Sentry</span><small>PAYMENT SECURITY</small></div>
+          <div className="brand-mark"><Icon name="shield" size={21} /><span className="brand-monogram">BP</span></div>
+          <div className="brand-name">Bastion<span>Pro</span><small>PAYMENT SECURITY</small></div>
           <button className="mobile-close" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation"><Icon name="close" /></button>
         </div>
 
