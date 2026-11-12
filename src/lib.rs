@@ -1030,11 +1030,11 @@ mod tests {
 
         builder.predecessor_account_id(vault_account());
         testing_env_with_promise_results(builder.build(), MockPromiseResult::Successful(vec![]));
-        assert!(vault.on_transfer_complete("auth_001".to_string(), transfer_id));
+        assert!(vault.on_transfer_complete("auth_001".to_string(), transfer_id.into()));
         assert!(vault.get_authorization("auth_001".to_string()).unwrap().used);
         assert_eq!(vault.get_authorization("auth_001".to_string()).unwrap().pending_transfer_id, None);
         assert_eq!(vault.reserved_balance_yocto, 0);
-        assert!(!vault.on_transfer_complete("auth_001".to_string(), transfer_id));
+        assert!(!vault.on_transfer_complete("auth_001".to_string(), transfer_id.into()));
         assert!(get_logs().iter().any(|line| line.contains("payment_executed")));
     }
 
